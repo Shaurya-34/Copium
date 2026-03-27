@@ -1,0 +1,41 @@
+# ── Python ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# ── Node ────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── Environment / Secrets ───────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE / Editor ────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Testing / Coverage ─────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
+# ── Misc ────────────────────────────────────
+*.log
