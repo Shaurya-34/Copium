@@ -1,6 +1,6 @@
 # CloudCFO — Project Status
 
-> **Last updated:** 2026-03-28 00:25 IST
+> **Last updated:** 2026-03-28 00:45 IST
 
 ---
 
@@ -43,7 +43,9 @@ cloudcfo/
     ├── __init__.py
     ├── cicd/
     │   └── __init__.py
-    ├── remediation/           # Phase 2 — remediation scripts (empty)
+    ├── remediation/
+    │   ├── __init__.py
+    │   └── remediator.py      # Phase 2 — boto3 remediation engine + audit log
     └── slack/
         ├── __init__.py
         ├── models.py          # Data models (CostAnomaly, IdleResource, etc.)
@@ -118,10 +120,17 @@ cloudcfo/
 
 ---
 
-### 🔲 Phase 2 — Remediation Scripts
-- [ ] boto3 integration for EC2 stop/start, EBS delete, rightsizing
-- [ ] Dry-run mode with confirmation
-- [ ] Audit logging for all remediation actions
+### ✅ Phase 2 — Remediation Scripts (COMPLETE)
+- [x] boto3 remediation engine scaffolded in `automation/remediation/remediator.py`
+- [x] EC2 stop action with dry-run support and estimated daily savings logging
+- [x] EBS delete action with unattached-volume safety checks and audit logging
+- [x] EC2 rightsizing action with monthly savings estimation and safe stop/modify/start flow
+- [x] Local JSON audit log for every remediation attempt
+- [x] `ConfirmationGate` — operator approval layer (propose → approve → execute workflow)
+- [x] `start_ec2()` — start previously stopped instances
+- [x] `snapshot_and_delete_ebs()` — safe delete with backup snapshot first
+- [x] `list_actions()` — returns all supported action types
+- [x] `PendingAction` dataclass for tracking action lifecycle (pending → approved/rejected → executed)
 
 ### 🔲 Phase 3 — Cost Anomaly Detection
 - [ ] AWS Cost Explorer API integration
@@ -155,6 +164,8 @@ cloudcfo/
 | 2026-03-27 | **Slack workspace** | Created "Cloudcfo" Slack workspace, `#new-channel`, and "webhooks" app |
 | 2026-03-27 | **Live E2E test** | Sent 5 alerts to Slack — all delivered and formatted correctly |
 | 2026-03-27 | **Cleanup** | Removed demo script and test files, pushed cleanup commit to GitHub |
+| 2026-03-28 | **Phase 2 scaffold** | Added `RemediationEngine` with EC2 stop, EBS delete, EC2 rightsize, dry-run handling, and JSON audit logging |
+| 2026-03-28 | **Phase 2 complete** | Added `ConfirmationGate`, `start_ec2()`, `snapshot_and_delete_ebs()`, `list_actions()`, `PendingAction` lifecycle tracking |
 
 ---
 
@@ -189,3 +200,5 @@ service.send_daily_summary(total_cost=1247.83, top_services=[("EC2", 487.50)])
 3. **Retry + rate-limit handling** in webhook client — production-ready from day one
 4. **Block Kit attachments** (not just `text`) — enables colours, buttons, rich formatting
 5. **AlertService facade** — insulates callers from webhook/builder internals
+6. **ConfirmationGate pattern** — enforces propose → approve → execute workflow so no live AWS action runs without explicit operator consent
+7. **Snapshot-before-delete** — `snapshot_and_delete_ebs` creates a backup before destroying volumes, making EBS cleanup reversible

@@ -39,3 +39,4 @@ htmlcov/
 
 # ── Misc ────────────────────────────────────
 *.log
+automation/remediation/audit_log.json
