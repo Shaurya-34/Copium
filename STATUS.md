@@ -1,6 +1,6 @@
 # CloudCFO — Project Status
 
-> **Last updated:** 2026-03-27 23:04 IST
+> **Last updated:** 2026-03-28 00:25 IST
 
 ---
 
@@ -31,28 +31,25 @@
 
 ```
 cloudcfo/
-├── .env.example              # Template for environment variables
+├── .env                       # Your Slack secrets (gitignored)
+├── .env.example               # Template showing what secrets are needed
 ├── .gitignore                 # Python + Node + secrets exclusions
 ├── requirements.txt           # All dependencies (phased)
-├── demo_slack.py              # Interactive demo script for Slack alerts
+├── STATUS.md                  # This file — project roadmap & progress
 ├── config/
 │   ├── __init__.py
 │   └── settings.py            # pydantic-settings config loader
-├── automation/
-│   ├── __init__.py
-│   ├── cicd/
-│   │   └── __init__.py
-│   ├── remediation/           # Phase 2 — remediation scripts (empty)
-│   ├── slack/
-│   │   ├── __init__.py
-│   │   ├── models.py          # Data models (CostAnomaly, IdleResource, etc.)
-│   │   ├── webhook.py         # Slack webhook client with retry logic
-│   │   ├── message_builder.py # Block Kit message builder
-│   │   └── alert_service.py   # High-level alert orchestrator
-│   └── tests/
-│       ├── __init__.py
-│       └── test_slack.py      # 19 tests — models, builder, webhook
-└── .venv/                     # Python virtual environment (gitignored)
+└── automation/
+    ├── __init__.py
+    ├── cicd/
+    │   └── __init__.py
+    ├── remediation/           # Phase 2 — remediation scripts (empty)
+    └── slack/
+        ├── __init__.py
+        ├── models.py          # Data models (CostAnomaly, IdleResource, etc.)
+        ├── webhook.py         # Slack webhook client with retry logic
+        ├── message_builder.py # Block Kit message builder
+        └── alert_service.py   # High-level alert orchestrator
 ```
 
 ---
@@ -60,14 +57,66 @@ cloudcfo/
 ## 🏗️ Phases & Roadmap
 
 ### ✅ Phase 1 — Slack Integration (COMPLETE)
-- [x] Pydantic data models: `CostAnomaly`, `IdleResource`, `RemediationAction`, `AlertPayload`, `AlertSeverity`
-- [x] Slack webhook client with URL validation, retry, rate-limit handling
-- [x] Block Kit message builder (full alert, simple alert, daily summary)
-- [x] High-level `AlertService` orchestrator
-- [x] Settings loader from `.env` via `pydantic-settings`
-- [x] Demo script with 5 modes: `--test`, `--anomaly`, `--idle`, `--summary`, `--full`, `--all`
-- [x] 19 passing unit tests
-- [x] `.env.example` template
+
+**Goal:** Build the notification pipeline so CloudCFO can send rich alerts to Slack.
+
+#### What was built:
+
+**Data Models** (`models.py`)
+- [x] `CostAnomaly` — represents a cost spike (service, cost, expected cost, region, severity auto-calculated)
+- [x] `IdleResource` — represents a wasted resource (CPU %, idle hours, monthly waste computed automatically)
+- [x] `RemediationAction` — represents a fix action (stop, delete, rightsize with estimated savings)
+- [x] `AlertPayload` — combines anomalies + idle resources + actions into one alert
+- [x] `AlertSeverity` — enum: INFO, WARNING, CRITICAL (auto-assigned based on cost increase %)
+
+**Slack Webhook Client** (`webhook.py`)
+- [x] URL validation — ensures webhook URL starts with `https://hooks.slack.com/`
+- [x] HTTP POST with `requests.Session` for connection pooling
+- [x] Automatic retry — retries up to 3 times on transient failures
+- [x] Rate-limit handling — respects Slack's `429 Retry-After` header
+- [x] `test()` method for quick connectivity checks
+
+**Message Builder** (`message_builder.py`)
+- [x] `build_alert()` — full composite alert with anomalies, idle resources, actions, and savings
+- [x] `build_simple_alert()` — single-issue alert with severity color-coding
+- [x] `build_daily_summary()` — end-of-day cost report with top services breakdown
+- [x] Block Kit formatting with emoji indicators, dividers, and markdown sections
+
+**Alert Service** (`alert_service.py`)
+- [x] `AlertService` class — high-level facade that ties models + builder + webhook together
+- [x] `send_anomaly_alert()` — one-call anomaly notification
+- [x] `send_idle_resource_alert()` — one-call idle resource digest
+- [x] `send_daily_summary()` — one-call daily cost report
+- [x] Error handling — catches webhook errors and returns `False` instead of crashing
+
+**Configuration** (`settings.py`)
+- [x] `SlackSettings` class using `pydantic-settings` — loads from `.env` file
+- [x] Fields: `webhook_url`, `channel`, `bot_name`, `bot_emoji`, `timeout_seconds`, `max_retries`
+- [x] Validates on startup — missing webhook URL gives a clear error
+
+**Infrastructure & DevOps**
+- [x] `.env.example` — template with all required/optional env vars
+- [x] `.gitignore` — covers `.env`, `.venv`, `__pycache__`, `node_modules`, IDE files
+- [x] `requirements.txt` — pinned dependencies (requests, pydantic, pydantic-settings, pytest, boto3)
+- [x] Python virtualenv created (`.venv/`)
+- [x] Git repo initialized and pushed to GitHub: [Shaurya-34/Copium](https://github.com/Shaurya-34/Copium)
+
+**End-to-End Verification**
+- [x] Created Slack workspace "Cloudcfo" with `#new-channel`
+- [x] Created Slack app "webhooks" with Incoming Webhook
+- [x] Sent 5 live alerts to Slack and verified delivery:
+  - ✅ Webhook connection test
+  - 🚨 Cost Anomaly alert (EC2 +290% spike)
+  - ⚠️ Idle Resources digest (3 resources, ~$210/mo waste)
+  - 📊 Daily Cost Summary ($1,247.83 spend)
+  - 🚨 Full composite alert (anomalies + idle + actions + savings)
+- [x] All alerts rendered correctly with Block Kit formatting
+
+#### What was removed after verification:
+- Removed `demo_slack.py` (demo script — no longer needed)
+- Removed `automation/tests/` (unit tests — 19 tests were passing before removal)
+
+---
 
 ### 🔲 Phase 2 — Remediation Scripts
 - [ ] boto3 integration for EC2 stop/start, EBS delete, rightsizing
@@ -95,11 +144,17 @@ cloudcfo/
 
 | Date | Action | Details |
 |---|---|---|
-| 2026-03-27 | **Phase 1 scaffolding** | Created `requirements.txt`, `demo_slack.py`, `test_slack.py` |
-| 2026-03-27 | **Phase 1 core modules** | Built `models.py`, `webhook.py`, `message_builder.py`, `alert_service.py`, `settings.py` |
-| 2026-03-27 | **Tests passing** | All 19 unit tests pass (models, message builder, webhook client) |
-| 2026-03-27 | **DevOps setup** | Created `.venv`, `.gitignore`, `.env.example`, initialized git, connected to GitHub remote |
-| 2026-03-27 | **STATUS.md** | Created this project status document for LLM context handoff |
+| 2026-03-27 | **Project init** | Created `requirements.txt`, `.gitignore`, `.env.example`, `config/settings.py` |
+| 2026-03-27 | **Data models** | Built `models.py` with 5 Pydantic models: `CostAnomaly`, `IdleResource`, `RemediationAction`, `AlertPayload`, `AlertSeverity` |
+| 2026-03-27 | **Webhook client** | Built `webhook.py` with retry logic, rate-limit handling, and URL validation |
+| 2026-03-27 | **Message builder** | Built `message_builder.py` with 3 Block Kit message types |
+| 2026-03-27 | **Alert service** | Built `alert_service.py` facade combining models + builder + webhook |
+| 2026-03-27 | **Demo & tests** | Created `demo_slack.py` (5 demo modes) and `test_slack.py` (19 unit tests, all passing) |
+| 2026-03-27 | **Venv + Git** | Created `.venv`, initialized git, connected to GitHub remote |
+| 2026-03-27 | **First push** | Force-pushed Phase 1 to `main` branch on GitHub |
+| 2026-03-27 | **Slack workspace** | Created "Cloudcfo" Slack workspace, `#new-channel`, and "webhooks" app |
+| 2026-03-27 | **Live E2E test** | Sent 5 alerts to Slack — all delivered and formatted correctly |
+| 2026-03-27 | **Cleanup** | Removed demo script and test files, pushed cleanup commit to GitHub |
 
 ---
 
@@ -119,11 +174,10 @@ pip install -r requirements.txt
 copy .env.example .env
 # Edit .env → paste your Slack webhook URL
 
-# 4. Run demo
-python demo_slack.py --all
-
-# 5. Run tests
-pytest automation/tests/ -v
+# 4. Use in Python
+from automation.slack.alert_service import AlertService
+service = AlertService()
+service.send_daily_summary(total_cost=1247.83, top_services=[("EC2", 487.50)])
 ```
 
 ---
