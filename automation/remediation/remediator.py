@@ -56,6 +56,14 @@ class RemediationEngine:
         audit_log_path: Path | str = AUDIT_LOG_PATH,
         session: Optional[boto3.session.Session] = None,
     ):
+        """
+        Create a RemediationEngine configured for a specific AWS region, with an EC2 client and audit log path.
+        
+        Parameters:
+            region_name (str): AWS region to target for the EC2 client (default "us-east-1").
+            audit_log_path (Path | str): Filesystem path to the JSON audit log file; will be converted to a Path.
+            session (boto3.session.Session | None): Optional boto3 session to use; if omitted a new session is created for `region_name`.
+        """
         self._session = session or boto3.Session(region_name=region_name)
         self._ec2 = self._session.client("ec2")
         self._audit_log_path = Path(audit_log_path)
@@ -66,7 +74,17 @@ class RemediationEngine:
         dry_run: bool = True,
         estimated_hourly_cost: Optional[float] = None,
     ) -> RemediationResult:
-        """Stop an idle EC2 instance."""
+        """
+        Attempt to stop the specified EC2 instance (dry-run by default) and record the outcome to the audit log.
+        
+        Parameters:
+            instance_id (str): The ID of the EC2 instance to stop.
+            dry_run (bool): If True, validate permissions and request without making changes.
+            estimated_hourly_cost (Optional[float]): Hourly cost in USD used to compute estimated daily savings; pass None to omit savings.
+        
+        Returns:
+            RemediationResult: Result object containing success status, action ("STOP_EC2"), resource id, mode ("DRY_RUN" or "LIVE"), a human-readable message, optional `savings_estimated`, and optional `metadata` with API response details.
+        """
         savings = self._format_savings(
             hourly_cost=estimated_hourly_cost,
             unit="day",
@@ -116,7 +134,17 @@ class RemediationEngine:
         dry_run: bool = True,
         estimated_monthly_cost: Optional[float] = None,
     ) -> RemediationResult:
-        """Delete an unattached EBS volume after confirming it is available."""
+        """
+        Delete an unattached EBS volume after validating it is in the `available` state.
+        
+        Parameters:
+            volume_id (str): The ID of the EBS volume to delete.
+            dry_run (bool): If True, validate permissions without performing deletion.
+            estimated_monthly_cost (Optional[float]): Monthly cost used to compute an estimated savings string; if None no savings are recorded.
+        
+        Returns:
+            RemediationResult: Result of the attempted deletion. `success` is `True` when the delete (or dry-run validation) succeeded. If the volume was skipped because it was attached or not `available`, `success` is `False` and `metadata` contains the volume `state` and `attachments`. On success `metadata` includes the service `response` (for live or dry-run) and the `state`.
+        """
         savings = self._format_currency(estimated_monthly_cost, "month")
 
         try:
@@ -185,7 +213,19 @@ class RemediationEngine:
         new_hourly_cost: float,
         dry_run: bool = True,
     ) -> RemediationResult:
-        """Resize an EC2 instance and report estimated monthly savings."""
+        """
+        Resize an EC2 instance to a target instance type (or validate the change in dry-run) and record an estimated monthly savings.
+        
+        Parameters:
+            instance_id: EC2 instance identifier to resize.
+            new_type: Target EC2 instance type to apply.
+            current_hourly_cost: Current instance hourly cost used to estimate savings.
+            new_hourly_cost: Proposed instance hourly cost used to estimate savings.
+            dry_run: If True, validate permissions and API calls without performing changes; if False, perform the live resize (stopping and restarting the instance if needed).
+        
+        Returns:
+            RemediationResult: Summary of the operation. `success` indicates whether the validation or live action succeeded; `mode` is set to `DRY_RUN` or `LIVE`; `savings_estimated` contains a formatted monthly savings string when cost inputs are provided.
+        """
         monthly_savings = max(current_hourly_cost - new_hourly_cost, 0) * HOURS_PER_MONTH
         savings = self._format_currency(monthly_savings, "month")
 
@@ -288,7 +328,15 @@ class RemediationEngine:
         instance_id: str,
         dry_run: bool = True,
     ) -> RemediationResult:
-        """Start a previously stopped EC2 instance."""
+        """
+        Start a previously stopped EC2 instance.
+        
+        Parameters:
+            dry_run (bool): If True, validate permissions and call the API with DryRun (no state change); if False, perform the live start.
+        
+        Returns:
+            RemediationResult: The operation outcome; `success` is `true` for a successful start or for a dry-run validation, `false` otherwise. The `mode` field will be set to `DRY_RUN` or `LIVE` accordingly and `metadata` may include the raw AWS response.
+        """
         try:
             response = self._ec2.start_instances(
                 InstanceIds=[instance_id],
@@ -331,10 +379,13 @@ class RemediationEngine:
         dry_run: bool = True,
         estimated_monthly_cost: Optional[float] = None,
     ) -> RemediationResult:
-        """Create a snapshot of an EBS volume, then delete the volume.
-
-        This is a safer alternative to `delete_unattached_ebs` — you keep
-        a backup snapshot before removing the volume.
+        """
+        Create a snapshot of an unattached, available EBS volume and then delete the volume.
+        
+        If the volume has attachments or is not in the "available" state, the operation is skipped and a failed result is returned with metadata describing the volume's state and attachments. In dry-run mode, the snapshot+delete path and required permissions are validated without making any changes. In live mode, a snapshot is created and waited on to complete before the volume is deleted; on success the result's metadata includes the created `snapshot_id` and the volume `state`.
+        
+        Returns:
+            RemediationResult: Outcome of the operation including `success`, `action`, `resource_id`, `mode` (`"DRY_RUN"` or `"LIVE"`), a human-readable `message`, optional `savings_estimated`, and optional `metadata` (e.g., `{"snapshot_id": ..., "state": ...}` on success).
         """
         savings = self._format_currency(estimated_monthly_cost, "month")
 
@@ -439,12 +490,29 @@ class RemediationEngine:
 
     @staticmethod
     def list_actions() -> list[str]:
-        """Return all supported remediation action types."""
+        """
+        List supported remediation action type identifiers.
+        
+        Returns:
+            list[str]: Supported action type strings.
+        """
         return list(ACTION_TYPES)
 
     # ── Internal Helpers ──────────────────────────────────────
 
     def _describe_instance(self, instance_id: str) -> dict[str, Any]:
+        """
+        Retrieve the EC2 instance description for the given instance ID.
+        
+        Parameters:
+            instance_id (str): The EC2 instance identifier to describe.
+        
+        Returns:
+            dict: The instance dictionary for the first matching instance as returned by boto3's describe_instances.
+        
+        Raises:
+            ValueError: If no matching instance is found for the provided instance_id.
+        """
         response = self._ec2.describe_instances(InstanceIds=[instance_id])
         reservations = response.get("Reservations", [])
         if not reservations or not reservations[0].get("Instances"):
@@ -452,6 +520,18 @@ class RemediationEngine:
         return reservations[0]["Instances"][0]
 
     def _describe_volume(self, volume_id: str) -> dict[str, Any]:
+        """
+        Return the described EBS volume information for the given volume ID.
+        
+        Parameters:
+            volume_id (str): The ID of the EBS volume to describe.
+        
+        Returns:
+            dict: The volume dictionary returned by EC2 for the specified volume.
+        
+        Raises:
+            ValueError: If no volume matching `volume_id` is found.
+        """
         response = self._ec2.describe_volumes(VolumeIds=[volume_id])
         volumes = response.get("Volumes", [])
         if not volumes:
@@ -459,6 +539,15 @@ class RemediationEngine:
         return volumes[0]
 
     def _append_audit_log(self, result: RemediationResult) -> None:
+        """
+        Append a remediation result to the engine's JSON audit log on disk.
+        
+        Adds an entry containing timestamp, action, resource_id, mode, success, message, optional savings_estimated, and optional metadata to the configured audit_log.json file. If the file exists and contains valid JSON, the new entry is appended to the existing list; if the file exists but contains invalid JSON, the file is treated as empty and overwritten. Ensures the audit directory exists before writing.
+        
+        Parameters:
+            result (RemediationResult): The remediation outcome to record.
+        
+        """
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": result.action,
@@ -485,6 +574,19 @@ class RemediationEngine:
             json.dump(existing_entries, file, indent=2)
 
     def _build_stop_message(self, response: dict[str, Any], dry_run: bool) -> str:
+        """
+        Builds a human-readable message describing the outcome of an EC2 stop_instances call.
+        
+        Parameters:
+            response (dict): The raw AWS EC2 `stop_instances` response dictionary.
+            dry_run (bool): If True, indicates the call was a dry-run validation.
+        
+        Returns:
+            str: A message summarizing the result. Possible forms:
+                - "Validated stop_instances request." when `dry_run` is True.
+                - "Stop request submitted." when response lacks instance state details.
+                - "Stop requested successfully (PreviousState -> CurrentState)." when state change information is present.
+        """
         if dry_run:
             return "Validated stop_instances request."
 
@@ -500,6 +602,19 @@ class RemediationEngine:
         )
 
     def _build_start_message(self, response: dict[str, Any], dry_run: bool) -> str:
+        """
+        Builds a human-readable message describing the outcome of an EC2 `start_instances` call.
+        
+        Parameters:
+            response (dict[str, Any]): The raw response returned by the EC2 `start_instances` API call; may contain a `"StartingInstances"` list with state transitions.
+            dry_run (bool): If True, indicates the call was a dry-run validation.
+        
+        Returns:
+            str: A message summarizing the outcome. Possible messages:
+                - "Validated start_instances request." (when dry_run is True)
+                - "Start requested successfully (<PreviousState> -> <CurrentState>)." (when a state transition is present)
+                - "Start request submitted." (when no instance state details are available)
+        """
         if dry_run:
             return "Validated start_instances request."
 
@@ -524,6 +639,21 @@ class RemediationEngine:
         savings_estimated: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> RemediationResult:
+        """
+        Convert an AWS ClientError into a RemediationResult, treating a dry-run `DryRunOperation` as success.
+        
+        If `exc` indicates a dry-run permission check (`Error.Code == "DryRunOperation"`) and `dry_run` is True, returns a successful result using `success_message`. Otherwise returns a failed result using the AWS error message extracted from the exception.
+        
+        Parameters:
+            exc (ClientError): The caught boto3 ClientError.
+            dry_run (bool): Whether the original operation was a dry-run; enables DryRunOperation handling.
+            success_message (str): Message to use when a dry-run validation is accepted.
+            savings_estimated (Optional[str]): Optional formatted savings estimate to include in the result.
+            metadata (Optional[dict[str, Any]]): Optional additional metadata to include in the result.
+        
+        Returns:
+            RemediationResult: `success=True` with `success_message` when dry-run validation passes; otherwise `success=False` with the AWS error message.
+        """
         error_code = exc.response.get("Error", {}).get("Code")
         if dry_run and error_code == "DryRunOperation":
             return self._result(
@@ -557,6 +687,12 @@ class RemediationEngine:
         savings_estimated: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> RemediationResult:
+        """
+        Create a RemediationResult representing the outcome of an attempted remediation and set its mode to either "DRY_RUN" or "LIVE".
+        
+        Returns:
+            RemediationResult: The result object containing success, action, resource_id, mode ("DRY_RUN" when `dry_run` is True, otherwise "LIVE"), message, and optional savings_estimated and metadata.
+        """
         return RemediationResult(
             success=success,
             action=action,
@@ -573,17 +709,43 @@ class RemediationEngine:
         unit: str,
         multiplier: int,
     ) -> Optional[str]:
+        """
+        Format an estimated savings amount by scaling an hourly cost and returning it as a currency string for a given unit.
+        
+        Parameters:
+        	hourly_cost (Optional[float]): Hourly cost to scale. If `None`, no savings are available.
+        	unit (str): Unit label to include in the formatted result (e.g., "month", "day").
+        	multiplier (int): Factor to multiply `hourly_cost` by (for example, hours per month).
+        
+        Returns:
+        	(Optional[str]): Formatted currency string like "$X.XX/{unit}", or `None` if `hourly_cost` is `None`.
+        """
         if hourly_cost is None:
             return None
         return self._format_currency(hourly_cost * multiplier, unit)
 
     def _format_currency(self, amount: Optional[float], unit: str) -> Optional[str]:
+        """
+        Format a monetary amount as a currency string with a unit suffix.
+        
+        Parameters:
+            amount (Optional[float]): The numeric amount to format; if None, no string is produced.
+            unit (str): Unit label appended after the currency (e.g., "hour", "month", "hr").
+        
+        Returns:
+            Optional[str]: A string like "$1,234.56/{unit}" when amount is provided, or `None` when amount is `None`.
+        """
         if amount is None:
             return None
         return f"${amount:,.2f}/{unit}"
 
     def as_dict(self, result: RemediationResult) -> dict[str, Any]:
-        """Convert a remediation result to a serialisable dictionary."""
+        """
+        Convert a RemediationResult into a JSON-serializable dictionary.
+        
+        Returns:
+            dict: A dictionary representation of `result` suitable for JSON serialization.
+        """
         return asdict(result)
 
 
@@ -623,6 +785,12 @@ class ConfirmationGate:
     """
 
     def __init__(self, engine: RemediationEngine):
+        """
+        Initialize the ConfirmationGate with a RemediationEngine and empty in-memory queues for pending and historical actions.
+        
+        Parameters:
+        	engine (RemediationEngine): Engine used to perform dry-run proposals and live remediation executions.
+        """
         self._engine = engine
         self._pending: dict[str, PendingAction] = {}
         self._history: list[PendingAction] = []
@@ -634,7 +802,16 @@ class ConfirmationGate:
         instance_id: str,
         estimated_hourly_cost: Optional[float] = None,
     ) -> PendingAction:
-        """Dry-run a stop and queue it for approval."""
+        """
+        Create and queue a proposed stop action after performing a dry-run stop of the specified EC2 instance.
+        
+        Parameters:
+            instance_id (str): The ID of the EC2 instance to propose stopping.
+            estimated_hourly_cost (Optional[float]): Hourly cost used to compute a savings estimate; may be None.
+        
+        Returns:
+            PendingAction: A pending action record containing the dry-run result and execution kwargs.
+        """
         dry_result = self._engine.stop_idle_ec2(
             instance_id=instance_id,
             dry_run=True,
@@ -653,7 +830,12 @@ class ConfirmationGate:
         self,
         instance_id: str,
     ) -> PendingAction:
-        """Dry-run a start and queue it for approval."""
+        """
+        Queue a start-EC2 action for operator approval after validating the operation with a dry-run.
+        
+        Returns:
+            PendingAction: The queued pending action for the start request, containing the dry-run `RemediationResult` and initial status `"pending"`.
+        """
         dry_result = self._engine.start_ec2(
             instance_id=instance_id,
             dry_run=True,
@@ -671,7 +853,16 @@ class ConfirmationGate:
         volume_id: str,
         estimated_monthly_cost: Optional[float] = None,
     ) -> PendingAction:
-        """Dry-run a volume delete and queue it for approval."""
+        """
+        Create a pending delete action for an unattached EBS volume by performing a dry-run and queuing the result for operator approval.
+        
+        Parameters:
+            volume_id (str): The ID of the EBS volume to delete.
+            estimated_monthly_cost (Optional[float]): Estimated monthly cost savings used for messaging and audit records.
+        
+        Returns:
+            PendingAction: A pending action record containing the dry-run RemediationResult and execution kwargs.
+        """
         dry_result = self._engine.delete_unattached_ebs(
             volume_id=volume_id,
             dry_run=True,
@@ -691,7 +882,16 @@ class ConfirmationGate:
         volume_id: str,
         estimated_monthly_cost: Optional[float] = None,
     ) -> PendingAction:
-        """Dry-run snapshot+delete and queue it for approval."""
+        """
+        Create a pending action by performing a dry-run snapshot-and-delete of an EBS volume and queuing it for operator approval.
+        
+        Parameters:
+            volume_id (str): The ID of the EBS volume to snapshot and delete.
+            estimated_monthly_cost (Optional[float]): Optional monthly cost used to compute and attach a savings estimate to the dry-run result.
+        
+        Returns:
+            PendingAction: A queued pending action containing the dry-run RemediationResult and the execution kwargs required to perform the live snapshot-and-delete.
+        """
         dry_result = self._engine.snapshot_and_delete_ebs(
             volume_id=volume_id,
             dry_run=True,
@@ -713,7 +913,18 @@ class ConfirmationGate:
         current_hourly_cost: float,
         new_hourly_cost: float,
     ) -> PendingAction:
-        """Dry-run a rightsize and queue it for approval."""
+        """
+        Create a pending rightsize action by performing a dry-run resize and queuing it for operator approval.
+        
+        Parameters:
+            instance_id (str): EC2 instance identifier to rightsize.
+            new_type (str): Target instance type to apply if approved.
+            current_hourly_cost (float): Current instance hourly cost used to estimate savings.
+            new_hourly_cost (float): Proposed instance hourly cost used to estimate savings.
+        
+        Returns:
+            PendingAction: The queued pending action containing the dry-run RemediationResult and execution kwargs.
+        """
         dry_result = self._engine.rightsize_ec2(
             instance_id=instance_id,
             new_type=new_type,
@@ -737,14 +948,34 @@ class ConfirmationGate:
     # ── Approve / Reject / Execute ────────────────────────────
 
     def approve(self, action_id: str) -> PendingAction:
-        """Mark a pending action as approved."""
+        """
+        Approve the pending action identified by `action_id`, marking it ready for execution.
+        
+        Parameters:
+            action_id (str): The unique identifier of the pending action to approve.
+        
+        Returns:
+            PendingAction: The updated pending action with its `status` set to `"approved"`.
+        
+        Raises:
+            KeyError: If no pending action exists for the given `action_id`.
+        """
         action = self._get_pending(action_id)
         action.status = "approved"
         logger.info("Action %s approved by operator.", action_id)
         return action
 
     def reject(self, action_id: str, reason: str = "") -> PendingAction:
-        """Reject a pending action. It will NOT be executed."""
+        """
+        Mark a pending action as rejected and move it from the pending queue into history.
+        
+        Parameters:
+        	action_id (str): Identifier of the pending action to reject.
+        	reason (str): Optional textual reason for the rejection; used for logging.
+        
+        Returns:
+        	PendingAction: The rejected action with its status set to `"rejected"`.
+        """
         action = self._get_pending(action_id)
         action.status = "rejected"
         del self._pending[action_id]
@@ -753,9 +984,16 @@ class ConfirmationGate:
         return action
 
     def execute(self, action_id: str) -> RemediationResult:
-        """Execute an approved action for real (dry_run=False).
-
-        Raises ValueError if the action is not in 'approved' status.
+        """
+        Execute a previously approved pending action in live mode and record its execution.
+        
+        Dispatches the pending action to the engine with live execution (no dry-run), updates the action's status to "executed", moves it from pending to history, and returns the remediation result.
+        
+        Returns:
+            RemediationResult: The outcome of performing the action.
+        
+        Raises:
+            ValueError: If the action is not in "approved" status.
         """
         action = self._get_pending(action_id)
         if action.status != "approved":
@@ -773,15 +1011,33 @@ class ConfirmationGate:
     # ── Query helpers ─────────────────────────────────────────
 
     def list_pending(self) -> list[PendingAction]:
-        """Return all actions awaiting approval."""
+        """
+        List all pending actions awaiting operator decision.
+        
+        Returns:
+            pending_actions (list[PendingAction]): List of PendingAction objects currently queued for approval.
+        """
         return list(self._pending.values())
 
     def list_history(self) -> list[PendingAction]:
-        """Return all completed/rejected actions."""
+        """
+        Return the list of actions that have been executed or rejected.
+        
+        Returns:
+            list[PendingAction]: A copy of historical `PendingAction` records with status `executed` or `rejected`.
+        """
         return list(self._history)
 
     def get_action(self, action_id: str) -> PendingAction:
-        """Look up any action by ID (pending or historical)."""
+        """
+        Look up a pending or historical action by its action ID.
+        
+        Returns:
+            action (PendingAction): The matching pending or historical action.
+        
+        Raises:
+            KeyError: If no action with the given ID exists.
+        """
         if action_id in self._pending:
             return self._pending[action_id]
         for a in self._history:
@@ -800,6 +1056,20 @@ class ConfirmationGate:
         dry_run_result: RemediationResult,
         kwargs: Optional[dict[str, Any]] = None,
     ) -> PendingAction:
+        """
+        Create and store a PendingAction for operator approval and return it.
+        
+        Parameters:
+        	action_id (str): Unique identifier for the pending action.
+        	action_type (str): Action category string (e.g., "STOP_EC2", "DELETE_EBS").
+        	resource_id (str): Target resource identifier (instance or volume ID).
+        	description (str): Human-readable description of the proposed action.
+        	dry_run_result (RemediationResult): Result produced by executing the action in dry-run mode.
+        	kwargs (dict[str, Any], optional): Execution parameters to be used if the action is approved.
+        
+        Returns:
+        	PendingAction: The pending action object that was created and stored in the gate's pending queue.
+        """
         pa = PendingAction(
             action_id=action_id,
             action_type=action_type,
@@ -818,12 +1088,32 @@ class ConfirmationGate:
         return pa
 
     def _get_pending(self, action_id: str) -> PendingAction:
+        """
+        Retrieve a pending PendingAction by its action identifier.
+        
+        Parameters:
+        	action_id (str): Identifier of the pending action to fetch.
+        
+        Returns:
+        	PendingAction: The matching pending action.
+        
+        Raises:
+        	KeyError: If no pending action exists with the given `action_id`.
+        """
         if action_id not in self._pending:
             raise KeyError(f"No pending action with ID '{action_id}'.")
         return self._pending[action_id]
 
     def _dispatch_live(self, action: PendingAction) -> RemediationResult:
-        """Route an approved action to the right engine method with dry_run=False."""
+        """
+        Execute the given pending action against the underlying RemediationEngine in live mode.
+        
+        Returns:
+            RemediationResult: The result produced by the engine call for the dispatched action.
+        
+        Raises:
+            ValueError: If the action's `action_type` is not recognized.
+        """
         kw = action.kwargs
         if action.action_type == "STOP_EC2":
             return self._engine.stop_idle_ec2(
@@ -860,5 +1150,10 @@ class ConfirmationGate:
 
     @staticmethod
     def _ts() -> str:
-        """Short timestamp for unique action IDs."""
+        """
+        Produce a UTC timestamp string suitable for use in unique action IDs.
+        
+        Returns:
+            timestamp (str): UTC timestamp formatted as YYYYmmddHHMMSS.
+        """
         return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
