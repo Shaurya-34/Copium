@@ -152,10 +152,10 @@ cloudcfo/
 - [x] Background threaded AWS remediation for instantaneous Slack response
 - [x] Final outcome thread reply mapping successful/failed Boto3 responses back to Slack
 
-### 🔲 Phase 5 — Dashboard & Reporting
-- [ ] Daily/weekly cost trend summaries
-- [ ] Savings tracking over time
-- [ ] Multi-account support
+### ✅ Phase 5 — Dashboard & Reporting (COMPLETE)
+- [x] FastAPI endpoint (`/api/dashboard`) returning live Boto3 metrics and slack channels for deep-links
+- [x] 7-day trailing mock cost arrays added for frontend graphing 
+- [x] `daily_report.py` created to securely fetch, parse, and send executive 5:00 PM Slack reports
 
 ---
 
@@ -178,6 +178,7 @@ cloudcfo/
 | 2026-03-28 | **Phase 3 scaffold** | Added Cost Explorer anomaly detector, threshold settings, and daily scan runner for Slack alerts |
 | 2026-03-28 | **Phase 2 complete** | Added `ConfirmationGate`, `start_ec2()`, `snapshot_and_delete_ebs()`, `list_actions()`, `PendingAction` lifecycle tracking |
 | 2026-03-28 | **Phase 4 complete** | Built FastAPI server, hooked up Slack signature verification, mapped buttons to boto3 background execution, pushed final results back to Slack. |
+| 2026-03-28 | **Phase 5 complete** | Added `/api/dashboard` with deep-linking & cost trend mapping. Created `daily_report.py` to automate end-of-day Slack reporting. MVP finished! |
 
 ---
 

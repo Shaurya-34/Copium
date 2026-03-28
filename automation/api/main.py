@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from slack_sdk.signature import SignatureVerifier
 
 from config.settings import slack_settings
@@ -13,6 +14,14 @@ logger = logging.getLogger("cloudcfo.api")
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="CloudCFO Webhook Listener", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allow UI frontend to connect during integration tests
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 signature_verifier = SignatureVerifier(slack_settings.signing_secret)
 engine = RemediationEngine()
@@ -120,4 +129,66 @@ def process_remediation(action_value: str, user_id: str):
 
     except Exception as e:
         logger.exception("Error executing remediation in background task")
+
+@app.get("/api/dashboard")
+def get_dashboard_metrics():
+    """
+    Phase 5: Aggregate the audit_log.json to provide live savings and operation counts for the UI frontend.
+    """
+    from automation.remediation.remediator import AUDIT_LOG_PATH
+    import re
+    
+    if not AUDIT_LOG_PATH.exists():
+        return {
+            "total_remediations_attempted": 0,
+            "total_remediations_successful": 0,
+            "total_monthly_savings_usd": 0.0,
+            "recent_actions": []
+        }
+        
+    try:
+        with open(AUDIT_LOG_PATH, "r", encoding="utf-8") as file:
+            audit_log = json.load(file)
+            
+        successful = 0
+        total_savings = 0.0
+        
+        for entry in audit_log:
+            if entry.get("success"):
+                successful += 1
+                
+            savings_str = entry.get("savings_estimated")
+            if savings_str and "$" in savings_str:
+                # E.g. "$25.00/month"
+                match = re.search(r'\$([\d\.\,]+)', savings_str)
+                if match:
+                    val = match.group(1).replace(",", "")
+                    try:
+                        total_savings += float(val)
+                    except ValueError:
+                        pass
+                        
+        # Sort logs newest first
+        audit_log.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+        
+        # 7-day mock cost series for UI charting (until AWS Organizations is fully enabled)
+        # In a production environment this would call CostExplorerDetector._client.get_cost_and_usage
+        import datetime
+        base_date = datetime.date.today()
+        cost_series = [
+            {"date": str(base_date - datetime.timedelta(days=i)), "total_cost": round(150.0 + (i * 12.5), 2)}
+            for i in range(6, -1, -1)
+        ]
+        
+        return {
+            "slack_channel": slack_settings.channel,  # For UI Deep Linking
+            "total_remediations_attempted": len(audit_log),
+            "total_remediations_successful": successful,
+            "total_monthly_savings_usd": total_savings,
+            "cost_series": cost_series,               # For UI Chart rendering
+            "recent_actions": audit_log[:10]          # Return top 10 most recent actions
+        }
+    except Exception as e:
+        logger.exception("Failed to load dashboard metrics")
+        raise HTTPException(status_code=500, detail="Internal server error parsing audit log")
 
