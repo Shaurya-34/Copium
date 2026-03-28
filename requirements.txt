@@ -13,6 +13,7 @@ boto3>=1.34.0
 # Phase 4: Webhook Listener
 fastapi>=0.109.0
 uvicorn>=0.27.0
+python-multipart>=0.0.9
 
 # Testing
 pytest>=8.0.0

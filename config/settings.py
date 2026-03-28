@@ -22,6 +22,11 @@ class SlackSettings(BaseSettings):
         alias="SLACK_WEBHOOK_URL",
         description="Slack Incoming Webhook URL",
     )
+    signing_secret: str = Field(
+        default="",
+        alias="SLACK_SIGNING_SECRET",
+        description="Slack App Signing Secret for verifying incoming webhooks",
+    )
     channel: str = Field(
         default="#cloud-costs",
         alias="SLACK_CHANNEL",
