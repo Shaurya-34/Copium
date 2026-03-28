@@ -1,6 +1,6 @@
 # CloudCFO — Project Status
 
-> **Last updated:** 2026-03-28 00:45 IST
+> **Last updated:** 2026-03-28 01:10 IST
 
 ---
 
@@ -41,6 +41,10 @@ cloudcfo/
 │   └── settings.py            # pydantic-settings config loader
 └── automation/
     ├── __init__.py
+    ├── anomaly/
+    │   ├── __init__.py
+    │   ├── detector.py        # Phase 3 — Cost Explorer anomaly detection
+    │   └── runner.py          # Phase 3 — daily scan orchestration
     ├── cicd/
     │   └── __init__.py
     ├── remediation/
@@ -132,10 +136,14 @@ cloudcfo/
 - [x] `list_actions()` — returns all supported action types
 - [x] `PendingAction` dataclass for tracking action lifecycle (pending → approved/rejected → executed)
 
-### 🔲 Phase 3 — Cost Anomaly Detection
-- [ ] AWS Cost Explorer API integration
-- [ ] Anomaly scoring algorithm
-- [ ] Scheduled daily scans (cron / Lambda)
+### ✅ Phase 3 — Cost Anomaly Detection (COMPLETE)
+- [x] AWS Cost Explorer detector scaffolded in `automation/anomaly/detector.py`
+- [x] Service-level daily anomaly scoring using baseline-average comparisons
+- [x] Daily scan runner added in `automation/anomaly/runner.py`
+- [x] Configurable anomaly thresholds added to `config/settings.py`
+- [x] Scheduled daily scans (Lambda handler `lambda_handler.py` and demo script implemented)
+- [x] Robust error handling for `DataUnavailableException` on new AWS accounts
+- [ ] Multi-account / linked-account anomaly coverage (Deferred pending Organization setup)
 
 ### 🔲 Phase 4 — Webhook Listener (Interactive Buttons)
 - [ ] FastAPI endpoint to receive Slack button clicks
@@ -165,6 +173,7 @@ cloudcfo/
 | 2026-03-27 | **Live E2E test** | Sent 5 alerts to Slack — all delivered and formatted correctly |
 | 2026-03-27 | **Cleanup** | Removed demo script and test files, pushed cleanup commit to GitHub |
 | 2026-03-28 | **Phase 2 scaffold** | Added `RemediationEngine` with EC2 stop, EBS delete, EC2 rightsize, dry-run handling, and JSON audit logging |
+| 2026-03-28 | **Phase 3 scaffold** | Added Cost Explorer anomaly detector, threshold settings, and daily scan runner for Slack alerts |
 | 2026-03-28 | **Phase 2 complete** | Added `ConfirmationGate`, `start_ec2()`, `snapshot_and_delete_ebs()`, `list_actions()`, `PendingAction` lifecycle tracking |
 
 ---
