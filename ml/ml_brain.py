@@ -11,23 +11,22 @@ print("🧠 Booting up the ML Brain (Live API Mode)...")
 # ==========================================
 API_URL = "http://127.0.0.1:8000/api/costs"
 
-try:
-    print(f"🌐 Fetching live infrastructure vitals from {API_URL}...")
-    response = requests.get(f"{API_URL}?mode=demo")
-    response.raise_for_status()
-    
-    # --- THE CRITICAL FIX ---
-    # Instead of the whole response, we only want the list inside 'data'
-    raw_payload = response.json()
-    df = pd.DataFrame(raw_payload['data']) 
-    # ------------------------
-    
-    print(f"✅ Success! Ingested {len(df)} live records.")
-    print(f"🔍 Actual columns found: {df.columns.tolist()}")
-    
-except Exception as e:
-    print(f"⚠️ Live API failed: {e}. Falling back to local CSV.")
-    df = pd.read_csv("aws_mock_data.csv")
+print(f"🌐 Fetching live infrastructure vitals from {API_URL}...")
+response = requests.get(API_URL)
+response.raise_for_status()
+
+# --- THE CRITICAL FIX ---
+# Instead of the whole response, we only want the list inside 'data'
+raw_payload = response.json()
+if not raw_payload.get('data'):
+    print("⚠️ No live data available from the API. Ensure your AWS credentials are valid and instances are running.")
+    exit(0)
+
+df = pd.DataFrame(raw_payload['data']) 
+# ------------------------
+
+print(f"✅ Success! Ingested {len(df)} live records.")
+print(f"🔍 Actual columns found: {df.columns.tolist()}")
 
 # ==========================================
 # --- 2. Clean NaNs & Feature Engineering ---

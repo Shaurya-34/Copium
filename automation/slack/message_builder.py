@@ -265,15 +265,45 @@ class MessageBuilder:
 
     @staticmethod
     def _action_block(action: RemediationAction) -> dict:
+        # Business Guardrail UI Logic
         risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(
             action.risk_level, "⚪"
         )
+        
+        button_text = "🔧 Fix"
+        button_style = "primary" if action.risk_level == "low" else "danger"
+        description = action.description
+        
+        # Scenario A: The Zombie
+        if "CODE_101_ZOMBIE" in action.action_id:
+            button_text = "🛑 Terminate Instance"
+            button_style = "danger"
+            description = f"🚨 *ZOMBIE DETECTED:* {description}"
+            
+        # Scenario B: Production Risk
+        elif "CODE_999_PROD_FIGHT" in action.action_id:
+            button_text = "👀 View in AWS Console"
+            button_style = "primary"
+            description = f"⚠️ *PROD PROTECTION:* {description}"
+            
+        # Scenario C: Security/Geofence
+        elif "SEC_REGION_UNAUTHORIZED" in action.action_id:
+            button_text = "🔒 Lock Down Region"
+            button_style = "danger"
+            description = f"🚨🚨🚨 *SECURITY BREACH:* {description}"
+            
+        # Scenario D: Quiet Hours
+        elif "CODE_104_OFF_HOURS_ACTIVITY" in action.action_id:
+            button_text = "⏸️ Pause until 8 AM Monday"
+            button_style = "primary"
+            description = f"🌙 *QUIET HOURS ACTIVITY:* {description}"
+
         return {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f"{risk_emoji} {action.description}\n"
+                    f"{risk_emoji} {description}\n"
                     f"  Saves ~${action.estimated_monthly_savings:,.2f}/mo  •  "
                     f"Risk: {action.risk_level}"
                 ),
@@ -282,11 +312,11 @@ class MessageBuilder:
                 "type": "button",
                 "text": {
                     "type": "plain_text",
-                    "text": "🔧 Fix",
+                    "text": button_text,
                     "emoji": True,
                 },
                 "value": action.action_id,
                 "action_id": f"fix_{action.action_id}",
-                "style": "primary" if action.risk_level == "low" else "danger",
+                "style": button_style,
             },
         }

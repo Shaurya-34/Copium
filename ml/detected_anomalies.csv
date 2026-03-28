@@ -1,8 +1,2 @@
 timestamp,service,region,resource_id,team,environment,project,cost_usd,cpu_usage_pct,cost_per_cpu,is_anomaly,severity,anomaly_code,suggested_action
-2026-03-28 12:50:34,AmazonEC2,ap-south-1,i-04e8076abaac55194,Engineering,Production,Hackathon,0.0,1.77,0.0,True,CRITICAL,SEC_REGION_UNAUTHORIZED,BLOCK_REGION_ACCESS
-2026-03-28 12:50:34,AmazonEC2,eu-north-1,i-04d8c441b4381055a,Engineering,Production,Hackathon,0.0,0.13,0.0,False,NORMAL,CODE_200_NORMAL,NONE
-2026-03-28 12:50:34,AmazonEC2,ap-southeast-1,i-0afafec7be8c7a42f,Engineering,Production,Hackathon,0.0,0.13,0.0,False,CRITICAL,SEC_REGION_UNAUTHORIZED,BLOCK_REGION_ACCESS
-2026-03-28 12:50:34,AmazonEC2,ap-southeast-1,i-0b7fcb3fa9b288171,Engineering,Production,Hackathon,0.0,0.14,0.0,False,CRITICAL,SEC_REGION_UNAUTHORIZED,BLOCK_REGION_ACCESS
-2026-03-28 12:50:34,AmazonEC2,us-east-1,i-027bf3e8cce9953e8,Engineering,Production,Hackathon,0.0,0.14,0.0,False,NORMAL,CODE_200_NORMAL,NONE
-2026-03-28 12:50:34,AWSLambda,us-west-2,lambahackathontestfunction,Engineering,Production,Hackathon,0.0,0.0,0.0,False,NORMAL,CODE_200_NORMAL,NONE
-2026-03-28 12:50:34,AmazonS3,us-west-2,hackathons3bucketmit,Engineering,Production,Hackathon,0.0,0.0,0.0,False,NORMAL,CODE_200_NORMAL,NONE
+2026-03-28 13:47:21,AmazonEC2,us-east-1,i-027bf3e8cce9953e8,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
