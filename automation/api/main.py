@@ -88,14 +88,6 @@ def process_remediation(action_value: str, user_id: str):
         action_type = parts[0]
         resource_id = parts[1] if len(parts) > 1 else "unknown"
         anomaly_code = parts[2] if len(parts) > 2 else "NONE"
-    elif action_value == "act-ec2-stop-001":
-        action_type = "STOP_EC2"
-        resource_id = "i-0abcd1234efgh5678"
-        anomaly_code = "LEGACY_TEST"
-    elif action_value == "act-ebs-del-001":
-        action_type = "DELETE_EBS"
-        resource_id = "vol-0xyz98765uvw43210"
-        anomaly_code = "LEGACY_TEST"
     else:
         logger.warning(f"Unrecognized action_value format: {action_value}")
         action_type = action_value
@@ -140,6 +132,12 @@ def process_remediation(action_value: str, user_id: str):
         elif action_type == "DELETE_EBS":
             result = engine.delete_unattached_ebs(volume_id=resource_id, dry_run=False)
             result_success, result_message = result.success, result.message
+        
+        # Scenario E: INVESTIGATE / MANUAL (Non-destructive)
+        elif action_type in ["INVESTIGATE", "MANUAL_REVIEW_REQUIRED"]:
+            result_success = True
+            result_message = f"Acknowledged. <@{user_id}> is investigating {resource_id}."
+        
         else:
             logger.error(f"Unsupported action type: {action_type}")
             return

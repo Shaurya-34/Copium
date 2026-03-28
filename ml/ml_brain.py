@@ -114,7 +114,7 @@ def apply_guardrails(row):
             reason_code = "CODE_999_PROD_FIGHT"
             action = "MANUAL_REVIEW_REQUIRED" 
             
-        elif row['cpu_usage_pct'] < 5:
+        elif row['cpu_usage_pct'] < 40:
             severity = "CRITICAL"
             reason_code = "CODE_101_ZOMBIE"
             action = "STOP_INSTANCE"

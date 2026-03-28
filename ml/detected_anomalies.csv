@@ -1,0 +1,9 @@
+timestamp,service,region,resource_id,team,environment,project,cost_usd,cpu_usage_pct,cost_per_cpu,is_anomaly,severity,anomaly_code,suggested_action
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-027bf3e8cce9953e8,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-0a4952ec2c350de58,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-084ab60a372f42dab,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-0b236574f9cc3cffc,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-0990d6fc2622ae743,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-0cd911defe314fdac,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-0394274216b273125,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
+2026-03-28 18:21:50,AmazonEC2,us-east-1,i-0529c87ca3d891eff,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
