@@ -1,2 +1,0 @@
-timestamp,service,region,resource_id,team,environment,project,cost_usd,cpu_usage_pct,cost_per_cpu,is_anomaly,severity,anomaly_code,suggested_action
-2026-03-28 13:47:21,AmazonEC2,us-east-1,i-027bf3e8cce9953e8,Engineering,dev,Core,0.0,0.0,0.0,False,WARNING,CODE_105_ML_OUTLIER,INVESTIGATE
