@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import requests
 import json
+import os
 from sklearn.ensemble import IsolationForest
 
 print("🧠 Booting up the ML Brain (Live API Mode)...")
@@ -10,9 +11,10 @@ print("🧠 Booting up the ML Brain (Live API Mode)...")
 # --- 1. Load the Data (The Live Handshake) ---
 # ==========================================
 API_URL = "http://127.0.0.1:8000/api/costs"
+API_KEY = "3d4c5eb8-9fe0-4458-882d-5750d9a78947"
 
 print(f"🌐 Fetching live infrastructure vitals from {API_URL}...")
-response = requests.get(API_URL)
+response = requests.get(API_URL, headers={"X-API-KEY": API_KEY})
 response.raise_for_status()
 
 # --- THE CRITICAL FIX ---
@@ -32,9 +34,10 @@ print(f"🔍 Actual columns found: {df.columns.tolist()}")
 # --- 2. Clean NaNs & Feature Engineering ---
 # ==========================================
 # SAFETY NET: Check if M1 actually sent the CPU column. If not, create it.
-# Ensure the column exists before math
-if 'cpu_usage_pct' not in df.columns:
-    df['cpu_usage_pct'] = 0.0
+# Ensure missing columns exist before math
+for col in ['cpu_usage_pct', 'cost_usd', 'team', 'project']:
+    if col not in df.columns:
+        df[col] = 0.0 if col in ['cpu_usage_pct', 'cost_usd'] else "Unknown"
 
 df['cpu_usage_pct'] = pd.to_numeric(df['cpu_usage_pct'], errors='coerce').fillna(0)
 
@@ -58,7 +61,8 @@ print(f"🎯 Training Complete! The AI flagged {df['is_anomaly'].sum()} suspicio
 # --- 4. HYBRID Severity Scoring ---
 # ==========================================
 print("\n⚖️ Loading User Preferences...")
-with open('config.json', 'r') as file:
+config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+with open(config_path, 'r') as file:
     config = json.load(file)
 
 user_multiplier = config.get("risk_multiplier", 2.0)
@@ -114,7 +118,7 @@ def apply_guardrails(row):
             reason_code = "CODE_999_PROD_FIGHT"
             action = "MANUAL_REVIEW_REQUIRED" 
             
-        elif row['cpu_usage_pct'] < 40:
+        elif row['cpu_usage_pct'] < 5:
             severity = "CRITICAL"
             reason_code = "CODE_101_ZOMBIE"
             action = "STOP_INSTANCE"
@@ -138,13 +142,14 @@ df[['severity', 'anomaly_code', 'suggested_action']] = df.apply(apply_guardrails
 # --- 6. Final Clean Export ---
 # ==========================================
 final_columns = [
-    'timestamp', 'service', 'region', 'resource_id', 
+    'timestamp', 'service', 'region', 'resource_id', 'resource_arn',
     'team', 'environment', 'project', 
     'cost_usd', 'cpu_usage_pct', 'cost_per_cpu',
     'is_anomaly', 'severity', 'anomaly_code', 'suggested_action'
 ]
 
-df[final_columns].to_csv("detected_anomalies.csv", index=False)
+output_path = os.path.join(os.path.dirname(__file__), "detected_anomalies.csv")
+df[final_columns].to_csv(output_path, index=False)
 
 # --- ADD THIS LOGIC HERE ---
 # Calculate the final tally after both ML and Guardrails have run
